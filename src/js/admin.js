@@ -1,4 +1,4 @@
-import { supabase, contractUrl } from './supabase.js';
+import { supabase, contractUrl, isSupabaseConfigured, supabaseConfigErrorMessage } from './supabase.js';
 
 const loginSection = document.getElementById('login-section');
 const appSection = document.getElementById('app-section');
@@ -50,6 +50,23 @@ function showAlert(message, type = 'error') {
 
 function hideAlert() {
   alertBox.classList.add('hidden');
+}
+
+function formatAuthError(error) {
+  if (!error) return 'Erro desconhecido ao entrar.';
+
+  const message = error.message || String(error);
+  const lower = message.toLowerCase();
+
+  if (lower.includes('failed to fetch') || lower.includes('network')) {
+    return `${message} Verifique sua conexão e se o projeto Supabase está ativo.`;
+  }
+
+  if (lower.includes('invalid api key') || lower.includes('invalid jwt')) {
+    return `${message} A chave anon do deploy pode estar incorreta — confira o secret VITE_SUPABASE_ANON_KEY no GitHub.`;
+  }
+
+  return message;
 }
 
 function fillCurrentDate() {
@@ -496,9 +513,9 @@ async function handleAuthSession(session) {
 }
 
 async function bootstrap() {
-  if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('SEU_PROJETO')) {
-    showAlert('Configure o arquivo .env com VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
-    setContractsListError('Supabase não configurado. Verifique o arquivo .env.');
+  if (!isSupabaseConfigured()) {
+    showAlert(supabaseConfigErrorMessage());
+    setContractsListError('Supabase não configurado.');
     return;
   }
 
@@ -519,10 +536,13 @@ async function bootstrap() {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      showAlert(error.message);
+      showAlert(formatAuthError(error));
+      return;
     }
+
+    await handleAuthSession(data.session);
   });
 
   btnLogout.addEventListener('click', async () => {

@@ -3,7 +3,22 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
+const PLACEHOLDER_MARKERS = ['placeholder.supabase.co', 'SEU_PROJETO', 'sua_chave_anon'];
+
+export function isSupabaseConfigured() {
+  if (!supabaseUrl || !supabaseAnonKey) return false;
+  const combined = `${supabaseUrl} ${supabaseAnonKey}`;
+  return !PLACEHOLDER_MARKERS.some((marker) => combined.includes(marker));
+}
+
+export function supabaseConfigErrorMessage() {
+  if (import.meta.env.PROD) {
+    return 'Supabase não configurado no deploy. Adicione os secrets VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em Settings → Secrets and variables → Actions do repositório no GitHub e faça um novo deploy.';
+  }
+  return 'Configure o arquivo .env com VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY (copie de .env.example).';
+}
+
+if (!isSupabaseConfigured()) {
   console.warn('Supabase não configurado. Copie .env.example para .env e preencha as variáveis.');
 }
 

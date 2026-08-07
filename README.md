@@ -69,6 +69,19 @@ Em **Settings → Secrets and variables → Actions**, adicione:
 | `VITE_SUPABASE_URL` | URL do projeto Supabase |
 | `VITE_SUPABASE_ANON_KEY` | Chave anon (pública) |
 
+### Supabase Auth (obrigatório para GitHub Pages)
+
+No painel do Supabase: **Authentication → URL Configuration**
+
+| Campo | Valor sugerido |
+|-------|----------------|
+| **Site URL** | `https://robincardoso.github.io/contrato-estetica/` |
+| **Redirect URLs** | `https://robincardoso.github.io/contrato-estetica/**` |
+
+Mantenha `http://localhost:5173/**` nas Redirect URLs para desenvolvimento local.
+
+Em **Authentication → Providers → Email**, confirme que login por e-mail/senha está habilitado.
+
 ### GitHub Pages
 
 **Settings → Pages → Source: GitHub Actions**

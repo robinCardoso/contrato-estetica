@@ -27,6 +27,19 @@ jobs:
 
       - run: npm ci
 
+      - name: Validate Supabase secrets
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Secrets VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY são obrigatórios."
+            exit 1
+          fi
+          case "$VITE_SUPABASE_URL" in
+            *placeholder*|*SEU_PROJETO*) echo "::error::VITE_SUPABASE_URL parece placeholder."; exit 1 ;;
+          esac
+          case "$VITE_SUPABASE_ANON_KEY" in
+            placeholder|*sua_chave_anon*) echo "::error::VITE_SUPABASE_ANON_KEY parece placeholder."; exit 1 ;;
+          esac
+
       - name: Build
         run: npm run build
         env:
