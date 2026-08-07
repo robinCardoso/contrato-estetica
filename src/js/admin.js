@@ -62,8 +62,10 @@ function fillCurrentDate() {
 function initSignaturePad() {
   const canvas = document.getElementById('sig-canvas');
   const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
-  canvas.width = canvas.offsetWidth * ratio;
-  canvas.height = canvas.offsetHeight * ratio;
+  const width = canvas.offsetWidth || canvas.parentElement?.clientWidth || 300;
+  const height = canvas.offsetHeight || 140;
+  canvas.width = width * ratio;
+  canvas.height = height * ratio;
   canvas.getContext('2d').scale(ratio, ratio);
 
   signaturePad = new SignaturePad(canvas, {
@@ -76,6 +78,12 @@ function initSignaturePad() {
   signaturePad.addEventListener('endStroke', () => {
     loadedSignatureDataUrl = null;
   });
+}
+
+function ensureSignaturePad() {
+  if (!signaturePad) {
+    initSignaturePad();
+  }
 }
 
 function compressSignatureImage(file, maxWidth = SIG_MAX_WIDTH, quality = 0.85) {
@@ -143,6 +151,22 @@ function setLoggedIn(isLoggedIn) {
   loginSection.classList.toggle('hidden', isLoggedIn);
   appSection.classList.toggle('hidden', !isLoggedIn);
   btnLogout.classList.toggle('hidden', !isLoggedIn);
+}
+
+function setContractsListLoading() {
+  contractsList.innerHTML = '<p class="text-slate-400">Carregando...</p>';
+}
+
+function setContractsListIdle() {
+  contractsList.innerHTML = '<p class="text-slate-400">Faça login para ver seus contratos.</p>';
+}
+
+function setContractsListEmpty() {
+  contractsList.innerHTML = '<p class="text-slate-400">Nenhum contrato.</p>';
+}
+
+function setContractsListError(message) {
+  contractsList.innerHTML = `<p class="text-rose-600">${escapeHtml(message)}</p>`;
 }
 
 async function fetchContractById(id) {
@@ -263,9 +287,18 @@ function resetFormToNew() {
 async function restoreSavedSignature() {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return;
-  const savedSig = await loadSavedSignature(session.user.id);
-  if (savedSig) {
-    await applySignatureToPad(savedSig);
+  await restoreSignatureForUser(session.user.id);
+}
+
+async function restoreSignatureForUser(userId) {
+  try {
+    ensureSignaturePad();
+    const savedSig = await loadSavedSignature(userId);
+    if (savedSig) {
+      await applySignatureToPad(savedSig);
+    }
+  } catch (err) {
+    console.warn('Não foi possível restaurar assinatura salva:', err);
   }
 }
 
@@ -324,23 +357,35 @@ function buildContractPayload(session, sigData) {
 }
 
 async function loadContracts() {
-  const { data, error } = await supabase
-    .from('contracts')
-    .select('id, token, status, patient_label, paciente_nome, created_at, signed_at')
-    .order('created_at', { ascending: false })
-    .limit(20);
+  setContractsListLoading();
 
-  if (error) {
-    contractsList.textContent = 'Erro ao carregar contratos.';
-    return;
-  }
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setContractsListIdle();
+      return;
+    }
 
-  if (!data.length) {
-    contractsList.innerHTML = '<p class="text-slate-400">Nenhum contrato criado ainda.</p>';
-    return;
-  }
+    const { data, error } = await supabase
+      .from('contracts')
+      .select('id, token, status, patient_label, paciente_nome, created_at, signed_at')
+      .order('created_at', { ascending: false })
+      .limit(20);
 
-  contractsList.innerHTML = data.map((item) => {
+    if (error) {
+      const hint = error.code === '42501'
+        ? ' Sem permissão para ler contratos — verifique as políticas RLS no Supabase.'
+        : '';
+      setContractsListError(`Erro ao carregar contratos: ${error.message}.${hint}`);
+      return;
+    }
+
+    if (!data?.length) {
+      setContractsListEmpty();
+      return;
+    }
+
+    contractsList.innerHTML = data.map((item) => {
     const label = escapeHtml(item.paciente_nome || item.patient_label || 'Sem identificação');
     const statusLabel = item.status === 'signed' ? 'Assinado' : item.status === 'sent' ? 'Aguardando' : 'Rascunho';
     const link = contractUrl(item.token);
@@ -366,40 +411,57 @@ async function loadContracts() {
         </div>
       </div>
     `;
-  }).join('');
+    }).join('');
 
-  contractsList.querySelectorAll('.copy-item-link').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      await navigator.clipboard.writeText(btn.dataset.link);
-      showAlert('Link copiado!', 'success');
+    contractsList.querySelectorAll('.copy-item-link').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(btn.dataset.link);
+        showAlert('Link copiado!', 'success');
+      });
     });
-  });
 
-  contractsList.querySelectorAll('.btn-edit-contract').forEach((btn) => {
-    btn.addEventListener('click', () => startEditContract(btn.dataset.id));
-  });
+    contractsList.querySelectorAll('.btn-edit-contract').forEach((btn) => {
+      btn.addEventListener('click', () => startEditContract(btn.dataset.id));
+    });
 
-  contractsList.querySelectorAll('.btn-view-contract').forEach((btn) => {
-    btn.addEventListener('click', () => startViewContract(btn.dataset.id));
-  });
+    contractsList.querySelectorAll('.btn-view-contract').forEach((btn) => {
+      btn.addEventListener('click', () => startViewContract(btn.dataset.id));
+    });
+  } catch (err) {
+    setContractsListError(err.message || 'Erro inesperado ao carregar contratos.');
+  }
+}
+
+async function handleAuthSession(session) {
+  if (!session) {
+    setLoggedIn(false);
+    setContractsListIdle();
+    return;
+  }
+
+  setLoggedIn(true);
+  ensureSignaturePad();
+  await loadContracts();
+  void restoreSignatureForUser(session.user.id);
 }
 
 async function bootstrap() {
   if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('SEU_PROJETO')) {
     showAlert('Configure o arquivo .env com VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
+    setContractsListError('Supabase não configurado. Verifique o arquivo .env.');
     return;
   }
 
   fillCurrentDate();
-  initSignaturePad();
+  setContractsListIdle();
 
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session) {
-    setLoggedIn(true);
-    const savedSig = await loadSavedSignature(session.user.id);
-    if (savedSig) await applySignatureToPad(savedSig);
-    await loadContracts();
-  }
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+      void handleAuthSession(session);
+    } else if (event === 'SIGNED_OUT') {
+      void handleAuthSession(null);
+    }
+  });
 
   document.getElementById('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -407,25 +469,19 @@ async function bootstrap() {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       showAlert(error.message);
-      return;
     }
-
-    setLoggedIn(true);
-    const savedSig = await loadSavedSignature(data.user.id);
-    if (savedSig) await applySignatureToPad(savedSig);
-    await loadContracts();
   });
 
   btnLogout.addEventListener('click', async () => {
     await supabase.auth.signOut();
-    setLoggedIn(false);
     hideAlert();
   });
 
   document.getElementById('btn-clear-sig').addEventListener('click', () => {
+    ensureSignaturePad();
     signaturePad.clear();
     loadedSignatureDataUrl = null;
   });
@@ -433,6 +489,7 @@ async function bootstrap() {
   document.getElementById('btn-load-sig').addEventListener('click', async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
+    ensureSignaturePad();
     const savedSig = await loadSavedSignature(session.user.id);
     if (savedSig) {
       await applySignatureToPad(savedSig);
@@ -459,6 +516,7 @@ async function bootstrap() {
     }
 
     try {
+      ensureSignaturePad();
       const dataUrl = await compressSignatureImage(file);
       await applySignatureToPad(dataUrl);
       showAlert('Foto da assinatura carregada. Clique em "Salvar assinatura no perfil" para guardar.', 'success');
