@@ -59,14 +59,30 @@ function fillCurrentDate() {
   document.getElementById('ano').value = String(hoje.getFullYear()).slice(-2);
 }
 
-function initSignaturePad() {
+function getSignatureCanvasDimensions() {
   const canvas = document.getElementById('sig-canvas');
-  const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
   const width = canvas.offsetWidth || canvas.parentElement?.clientWidth || 300;
   const height = canvas.offsetHeight || 140;
-  canvas.width = width * ratio;
-  canvas.height = height * ratio;
-  canvas.getContext('2d').scale(ratio, ratio);
+  return {
+    width: Math.max(width, 1),
+    height: Math.max(height, 1),
+  };
+}
+
+function initSignaturePad() {
+  const canvas = document.getElementById('sig-canvas');
+  const { width, height } = getSignatureCanvasDimensions();
+  const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+
+  if (signaturePad) {
+    signaturePad.off();
+  }
+
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(ratio, ratio);
 
   signaturePad = new SignaturePad(canvas, {
     penColor: 'rgb(0, 0, 128)',
@@ -81,7 +97,13 @@ function initSignaturePad() {
 }
 
 function ensureSignaturePad() {
-  if (!signaturePad) {
+  const canvas = document.getElementById('sig-canvas');
+  const { width, height } = getSignatureCanvasDimensions();
+  const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+  const expectedWidth = Math.round(width * ratio);
+  const expectedHeight = Math.round(height * ratio);
+
+  if (!signaturePad || canvas.width !== expectedWidth || canvas.height !== expectedHeight) {
     initSignaturePad();
   }
 }
@@ -113,18 +135,38 @@ function compressSignatureImage(file, maxWidth = SIG_MAX_WIDTH, quality = 0.85) 
   });
 }
 
-async function applySignatureToPad(dataUrl) {
-  signaturePad.clear();
-  await signaturePad.fromDataURL(dataUrl, {
-    ratio: 1,
-    width: signaturePad.canvas.offsetWidth,
-    height: signaturePad.canvas.offsetHeight,
-  });
-  loadedSignatureDataUrl = dataUrl;
+function isValidSignatureDataUrl(dataUrl) {
+  return typeof dataUrl === 'string' && /^data:image\/(png|jpeg|jpg);/i.test(dataUrl);
+}
+
+async function applySignatureToPad(dataUrl, { keepOnFailure = false } = {}) {
+  if (!isValidSignatureDataUrl(dataUrl)) {
+    console.warn('Assinatura inválida ou ausente.');
+    return false;
+  }
+
+  ensureSignaturePad();
+  const { width, height } = getSignatureCanvasDimensions();
+
+  try {
+    signaturePad.clear();
+    await signaturePad.fromDataURL(dataUrl, {
+      ratio: 1,
+      width,
+      height,
+    });
+    loadedSignatureDataUrl = dataUrl;
+    return true;
+  } catch (err) {
+    console.warn('Não foi possível aplicar assinatura no canvas:', err);
+    signaturePad.clear();
+    loadedSignatureDataUrl = keepOnFailure ? dataUrl : null;
+    return false;
+  }
 }
 
 function getSignatureDataUrl() {
-  if (!signaturePad.isEmpty()) {
+  if (signaturePad && !signaturePad.isEmpty()) {
     return signaturePad.toDataURL('image/png');
   }
   return loadedSignatureDataUrl;
@@ -260,7 +302,9 @@ function fillFormFromContract(contract) {
 function clearFormFields() {
   document.getElementById('contract-form').reset();
   fillCurrentDate();
-  signaturePad.clear();
+  if (signaturePad) {
+    signaturePad.clear();
+  }
   loadedSignatureDataUrl = null;
 }
 
@@ -292,11 +336,14 @@ async function restoreSavedSignature() {
 
 async function restoreSignatureForUser(userId) {
   try {
-    ensureSignaturePad();
     const savedSig = await loadSavedSignature(userId);
-    if (savedSig) {
-      await applySignatureToPad(savedSig);
-    }
+    if (!savedSig) return;
+
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
+
+    await applySignatureToPad(savedSig);
   } catch (err) {
     console.warn('Não foi possível restaurar assinatura salva:', err);
   }
@@ -304,20 +351,23 @@ async function restoreSignatureForUser(userId) {
 
 async function startEditContract(id) {
   try {
+    hideAlert();
     const contract = await fetchContractById(id);
     if (contract.status !== 'sent') {
       showAlert('Apenas contratos aguardando assinatura podem ser editados.');
       return;
     }
+
+    ensureSignaturePad();
     fillFormFromContract(contract);
+    setEditMode(contract);
+
     if (contract.sig_profissional) {
-      await applySignatureToPad(contract.sig_profissional);
+      await applySignatureToPad(contract.sig_profissional, { keepOnFailure: true });
     } else {
       signaturePad.clear();
       loadedSignatureDataUrl = null;
     }
-    setEditMode(contract);
-    hideAlert();
   } catch (err) {
     showAlert(err.message || 'Erro ao carregar contrato para edição.');
   }
@@ -489,13 +539,17 @@ async function bootstrap() {
   document.getElementById('btn-load-sig').addEventListener('click', async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-    ensureSignaturePad();
     const savedSig = await loadSavedSignature(session.user.id);
-    if (savedSig) {
-      await applySignatureToPad(savedSig);
+    if (!savedSig) {
+      showAlert('Nenhuma assinatura salva encontrada.');
+      return;
+    }
+
+    const applied = await applySignatureToPad(savedSig);
+    if (applied) {
       showAlert('Assinatura carregada.', 'success');
     } else {
-      showAlert('Nenhuma assinatura salva encontrada.');
+      showAlert('Assinatura salva encontrada, mas não foi possível exibir no canvas. Tente carregar a foto novamente.');
     }
   });
 
