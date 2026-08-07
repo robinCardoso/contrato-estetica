@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -39,6 +39,9 @@ jobs:
           case "$VITE_SUPABASE_ANON_KEY" in
             placeholder|*sua_chave_anon*) echo "::error::VITE_SUPABASE_ANON_KEY parece placeholder."; exit 1 ;;
           esac
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Build
         run: npm run build
@@ -47,9 +50,48 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_BASE_PATH: /contrato-estetica/
 
+      - name: Verify production build (bundled assets only)
+        run: |
+          set -e
+          echo "=== Verificando dist/admin.html e dist/contract.html ==="
+          for f in dist/admin.html dist/contract.html; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Arquivo $f não encontrado no build."
+              exit 1
+            fi
+            if grep -qE '(src/js/|\./src/)' "$f"; then
+              echo "::error::$f ainda referencia código-fonte src/ — o build Vite falhou."
+              grep -nE '(src/js/|\./src/)' "$f" || true
+              exit 1
+            fi
+            if ! grep -qE '/contrato-estetica/assets/.*\.js' "$f"; then
+              echo "::error::$f não contém bundle em /contrato-estetica/assets/*.js"
+              exit 1
+            fi
+          done
+          if [ ! -d dist/assets ] || [ -z "$(ls -A dist/assets/*.js 2>/dev/null)" ]; then
+            echo "::error::Pasta dist/assets/ vazia ou ausente."
+            exit 1
+          fi
+          echo "OK: HTML usa bundles Vite em /contrato-estetica/assets/"
+
+      - name: Add .nojekyll
+        run: touch dist/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
+      - name: Publish gh-pages branch (fallback)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "deploy: ${{ github.sha }}"
 
   deploy:
     needs: build

@@ -84,7 +84,16 @@ Em **Authentication → Providers → Email**, confirme que login por e-mail/sen
 
 ### GitHub Pages
 
-**Settings → Pages → Source: GitHub Actions**
+> **IMPORTANTE:** o site **não** pode publicar a branch `main` diretamente. Os arquivos na raiz (`admin.html`, `contract.html`) apontam para `./src/js/` e só funcionam com o Vite em desenvolvimento. Em produção, o workflow gera `dist/` com bundles em `/contrato-estetica/assets/`.
+
+**Settings → Pages → Build and deployment → Source:**
+
+- **GitHub Actions** (recomendado), **ou**
+- **Deploy from a branch:** `gh-pages` / `/ (root)`
+
+**Não use** `main` / `/ (root)` — isso quebra o login com erro `@supabase/supabase-js`.
+
+Instruções detalhadas: [GITHUB_PAGES.md](./GITHUB_PAGES.md)
 
 A cada push na branch `main`, o site é publicado em:
 
