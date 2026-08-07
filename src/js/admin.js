@@ -48,20 +48,19 @@ function initSignaturePad() {
 
 async function loadSavedSignature(userId) {
   const { data } = await supabase
-    .from('professional_profiles')
+    .from('perfis')
     .select('sig_profissional')
-    .eq('user_id', userId)
+    .eq('id', userId)
     .maybeSingle();
 
   return data?.sig_profissional || null;
 }
 
 async function saveProfileSignature(userId, sig) {
-  await supabase.from('professional_profiles').upsert({
-    user_id: userId,
-    sig_profissional: sig,
-    updated_at: new Date().toISOString(),
-  });
+  await supabase
+    .from('perfis')
+    .update({ sig_profissional: sig })
+    .eq('id', userId);
 }
 
 function setLoggedIn(isLoggedIn) {

@@ -1,14 +1,10 @@
 -- Contratos estéticos: schema inicial
 -- Execute no SQL Editor do Supabase: https://supabase.com/dashboard/project/_/sql
+--
+-- Assinatura da profissional: use a tabela perfis (coluna sig_profissional).
+-- Rode também: supabase/migrations/002_integrate_perfis.sql
 
 create extension if not exists pgcrypto;
-
-create table if not exists public.professional_profiles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  nome text not null default '',
-  sig_profissional text,
-  updated_at timestamptz not null default now()
-);
 
 create table if not exists public.contracts (
   id uuid primary key default gen_random_uuid(),
@@ -46,16 +42,7 @@ create index if not exists contracts_token_idx on public.contracts(token);
 create index if not exists contracts_created_by_idx on public.contracts(created_by);
 create index if not exists contracts_status_idx on public.contracts(status);
 
-alter table public.professional_profiles enable row level security;
 alter table public.contracts enable row level security;
-
-drop policy if exists "Users manage own profile" on public.professional_profiles;
-create policy "Users manage own profile"
-  on public.professional_profiles
-  for all
-  to authenticated
-  using (user_id = auth.uid())
-  with check (user_id = auth.uid());
 
 drop policy if exists "Users view own contracts" on public.contracts;
 create policy "Users view own contracts"

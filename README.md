@@ -11,17 +11,30 @@ Sistema para a profissional criar contratos com assinatura pré-preenchida e env
 
 ## Configuração do Supabase
 
-### 1. Executar a migração SQL
+### 1. Executar as migrações SQL
 
-No [SQL Editor](https://supabase.com/dashboard/project/_/sql) do seu projeto, execute o arquivo:
+No [SQL Editor](https://supabase.com/dashboard/project/_/sql) do seu projeto, execute em ordem:
 
-`supabase/migrations/001_contracts.sql`
+1. `supabase/migrations/001_contracts.sql` — tabela `contracts`, RPCs e RLS
+2. `supabase/migrations/002_integrate_perfis.sql` — coluna `sig_profissional` em `perfis` e políticas RLS
+
+### Integração com `perfis`
+
+O admin usa a tabela **`perfis`** já existente no projeto (não `professional_profiles`):
+
+- `perfis.id` = `auth.users.id` (mesmo UUID do login)
+- `contracts.created_by` referencia `auth.users(id)` — compatível com `perfis.id`
+- A assinatura salva no perfil é reutilizada ao abrir o admin; cada contrato também guarda `sig_profissional` na linha do contrato
+
+**RLS em `perfis`:** se o admin não carrega a assinatura salva, verifique se o usuário autenticado pode `SELECT` e `UPDATE` a própria linha (`id = auth.uid()`). A migração `002` cria políticas `perfis_select_own` e `perfis_update_own` se ainda não existirem equivalentes. Não altera triggers de referral ou outra lógica de `perfis`.
+
+**Login:** use usuários já criados em Authentication com linha correspondente em `perfis` (criada pelo fluxo existente do app).
 
 ### 2. Criar usuário da profissional
 
 No Supabase: **Authentication → Users → Add user**
 
-Crie um e-mail e senha que só a profissional conheça.
+Crie um e-mail e senha que só a profissional conheça. Garanta que exista linha em `perfis` para esse `id` (normalmente via trigger do app principal).
 
 ### 3. Variáveis de ambiente
 
@@ -76,7 +89,7 @@ A cada push na branch `main`, o site é publicado em:
 
 - Cada contrato tem um **token aleatório de 48 caracteres** — impossível de adivinhar
 - Paciente só acessa o contrato pelo token (via RPC no Supabase)
-- Assinatura da profissional fica no banco, não no código público
+- Assinatura da profissional fica em `perfis.sig_profissional` e na linha do contrato
 - Apenas usuários autenticados veem a lista de contratos no admin
 
 ## LGPD
