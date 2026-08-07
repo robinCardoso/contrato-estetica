@@ -1,0 +1,521 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Contrato — Assinatura da Paciente</title>
+    <!-- CDN do Tailwind para navegadores online -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2pdf para gerar o PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Signature Pad para assinaturas no touch/mouse -->
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    <script src="https://unpkg.com/imask"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* FALLBACK COMPLETO DE ESTILOS PARA O SAFARI/IPHONE EM ARQUIVO LOCAL (FILE://) */
+        * {
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            background-color: #f3f4f6;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+        
+        /* Utilitários nativos para garantir renderização perfeita no iOS Safari sem depender do CDN */
+        .max-w-4xl { max-width: 56rem; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        .bg-white { background-color: #ffffff; }
+        .bg-gray-50 { background-color: #f9fafb; }
+        .bg-gray-100 { background-color: #f3f4f6; }
+        .bg-slate-900 { background-color: #0f172a; }
+        .bg-blue-600 { background-color: #2563eb; }
+        .text-white { color: #ffffff; }
+        .text-gray-800 { color: #1f2937; }
+        .text-gray-700 { color: #374151; }
+        .text-gray-600 { color: #4b5563; }
+        .text-gray-500 { color: #6b7280; }
+        .text-slate-800 { color: #1e293b; }
+        .rounded-lg { border-radius: 0.5rem; }
+        .rounded-xl { border-radius: 0.75rem; }
+        .rounded-2xl { border-radius: 1rem; }
+        .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
+        .shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        .border { border: 1px solid #e5e7eb; }
+        .border-2 { border-width: 2px; }
+        .border-gray-200 { border-color: #e5e7eb; }
+        .border-gray-800 { border-color: #1f2937; }
+        .flex { display: -webkit-box; display: -webkit-flex; display: flex; }
+        .flex-col { -webkit-box-orient: vertical; -webkit-box-direction: normal; flex-direction: column; }
+        .items-center { -webkit-box-align: center; align-items: center; }
+        .justify-between { -webkit-box-pack: justify; justify-content: space-between; }
+        .justify-center { -webkit-box-pack: center; justify-content: center; }
+        .grid { display: grid; }
+        .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+        .gap-2 { gap: 0.5rem; }
+        .gap-3 { gap: 0.75rem; }
+        .gap-4 { gap: 1rem; }
+        .p-3 { padding: 0.75rem; }
+        .p-4 { padding: 1rem; }
+        .p-6 { padding: 1.5rem; }
+        .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .mb-3 { margin-bottom: 0.75rem; }
+        .mb-6 { margin-bottom: 1.5rem; }
+        .mb-8 { margin-bottom: 2rem; }
+        .font-bold { font-weight: 700; }
+        .font-semibold { font-weight: 600; }
+        .font-medium { font-weight: 500; }
+        .text-center { text-align: center; }
+        .uppercase { text-transform: uppercase; }
+        .hidden { display: none !important; }
+        .sticky { position: -webkit-sticky; position: sticky; }
+        .top-1 { top: 0.25rem; }
+        .z-50 { z-index: 50; }
+        .fixed { position: fixed; }
+        .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+        .z-\[100\] { z-index: 100; }
+
+        @media (min-width: 640px) {
+            .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .sm\:flex-row { flex-direction: row; }
+            .sm\:p-12 { padding: 3rem; }
+            .sm\:text-2xl { font-size: 1.5rem; line-height: 2rem; }
+            .sm\:text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+            .sm\:text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+        }
+
+        /* Estilos para os inputs e prevenção de auto-zoom incômodo do iPhone */
+        input[type="text"], input[type="tel"], input[type="number"] {
+            -webkit-appearance: none;
+            appearance: none;
+            border-radius: 0;
+            font-size: 16px !important; /* Previne auto-zoom forçado do Safari iOS ao focar */
+        }
+        .input-line {
+            border: none;
+            border-bottom: 1px solid #4b5563;
+            background-color: transparent;
+            padding: 4px 2px;
+            font-family: inherit;
+            color: #1f2937;
+            outline: none;
+            transition: border-color 0.2s;
+            width: 100%;
+        }
+        .input-line:focus {
+            border-bottom: 2px solid #2563eb;
+        }
+        .input-inline {
+            display: inline-block;
+            width: auto;
+            min-width: 36px;
+            text-align: center;
+        }
+        .signature-wrapper {
+            position: relative;
+            width: 100%;
+            height: 130px;
+            border: 1px dashed #9ca3af;
+            border-radius: 0.5rem;
+            background-color: #f9fafb;
+            overflow: hidden;
+        }
+        .signature-pad {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .avoid-break {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        .no-print {
+            display: flex;
+        }
+        .pdf-mode .no-print {
+            display: none !important;
+        }
+        .pdf-mode .signature-wrapper {
+            border: 1px solid transparent;
+            border-bottom: 1px solid #000;
+            border-radius: 0;
+            background-color: transparent;
+        }
+        body.pdf-mode {
+            background-color: #ffffff !important;
+            padding: 0 !important;
+            margin: 0 !important;
+        }
+        body.pdf-mode #document-container {
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0px 10px !important;
+            margin: 0 auto !important;
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        .backdrop-blur-md {
+            -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="py-3 px-2 sm:py-6 sm:px-6">
+
+    <div id="contract-loading" class="max-w-4xl mx-auto mb-3 bg-blue-50 border border-blue-200 text-blue-800 text-xs px-3 py-2 rounded-lg">
+        Carregando contrato...
+    </div>
+    <div id="contract-error" class="hidden max-w-4xl mx-auto mb-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs px-3 py-2 rounded-lg"></div>
+
+    <div id="file-protocol-warning" class="hidden max-w-4xl mx-auto mb-2 no-print bg-amber-50 border border-amber-200 text-amber-800 text-[11px] sm:text-xs px-3 py-2 rounded-lg">
+        <strong>Atenção:</strong> este formulário foi aberto como arquivo local. Para a câmera funcionar no celular, publique-o em um link HTTPS ou acesse por um servidor local na rede.
+    </div>
+
+    <div class="max-w-4xl mx-auto mb-3 no-print flex justify-between items-center gap-3 bg-white/90 backdrop-blur-md px-3.5 py-2 rounded-xl shadow-sm border border-gray-100 sticky top-1 z-50">
+        <div class="text-[11px] sm:text-xs text-gray-500 font-medium hidden xs:block">
+            Preencha seus dados e assine o documento.
+        </div>
+        <div class="flex items-center gap-2 w-full xs:w-auto justify-end">
+            <button onclick="generatePDF()" id="btn-gerar" class="px-3 py-1 sm:px-3.5 sm:py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] sm:text-xs font-medium transition-all active:scale-95 shadow-sm flex items-center gap-1.5">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+                <span>Salvar / Enviar PDF</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="document-container" class="max-w-4xl mx-auto bg-white p-4 sm:p-12 shadow-xl rounded-lg text-gray-800 text-xs sm:text-sm leading-snug sm:leading-relaxed mb-6">
+        
+        <h1 class="text-base sm:text-2xl font-bold text-center mb-4 sm:mb-8 uppercase tracking-normal sm:tracking-wide">
+            Contrato de Prestação de Serviços Estéticos e Termo de Consentimento Livre e Esclarecido
+        </h1>
+
+        <!-- Identificação do Contratante -->
+        <div class="bg-gray-50 p-3 sm:p-4 rounded-lg mb-6 border border-gray-200 avoid-break">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="font-bold text-sm sm:text-lg">CONTRATANTE (PACIENTE)</h2>
+                <div class="no-print flex items-center gap-2">
+                    <input type="file" id="patient-photo-input" accept="image/*" capture="user"
+                           style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;"
+                           onchange="handlePhotoUpload(event)">
+                    <label id="btn-photo-label" for="patient-photo-input" class="text-[11px] bg-slate-900 hover:bg-slate-800 text-white px-2.5 py-1 rounded-md shadow-sm transition-all active:scale-95 flex items-center gap-1 font-medium cursor-pointer">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Tirar / Anexar Foto
+                    </label>
+                    <button type="button" id="btn-photo-gallery" onclick="openGalleryPicker()" class="text-[10px] text-gray-500 hover:text-gray-700 underline font-medium">
+                        Galeria
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-4 items-start">
+                <!-- ÁREA DE FOTO DO PACIENTE / DOCUMENTO -->
+                <div id="photo-preview-container" class="w-32 h-40 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center relative overflow-hidden shrink-0">
+                    <img id="patient-photo-img" class="w-full h-full object-contain hidden bg-slate-100 p-0.5" alt="Foto do Paciente">
+                    <div id="photo-placeholder" class="text-center p-2 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-1 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        <span class="text-[10px] block leading-tight">Foto do Paciente</span>
+                    </div>
+                    <button type="button" id="btn-remove-photo" onclick="removePhoto()" class="absolute top-1 right-1 bg-red-600/80 text-white rounded-full p-1 shadow hidden no-print hover:bg-red-700 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- DADOS DO PACIENTE -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                    <div class="col-span-1 sm:col-span-2">
+                        <label class="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase">Nome Completo</label>
+                        <input type="text" id="input-nome" class="input-line uppercase" placeholder="Digite o nome completo" oninput="this.value = this.value.toUpperCase()">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase">CPF</label>
+                        <input type="text" id="input-cpf" class="input-line" placeholder="000.000.000-00">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase">RG</label>
+                        <input type="text" id="input-rg" class="input-line uppercase" placeholder="Número do RG">
+                    </div>
+                    <div class="col-span-1 sm:col-span-2">
+                        <label class="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase">Telefone</label>
+                        <input type="tel" id="input-telefone" class="input-line" placeholder="(00) 00000-0000">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-4 sm:space-y-6 text-left sm:text-justify">
+            <div>
+                <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 1 – DO OBJETO</h3>
+                <p>O presente contrato tem por objeto a prestação de serviços estéticos faciais e/ou corporais, realizados de acordo com a avaliação profissional, respeitando as indicações técnicas, científicas e legais.</p>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 2 – DA AVALIAÇÃO</h3>
+                <p>A paciente declara que forneceu informações verdadeiras sobre seu estado de saúde, uso de medicamentos, alergias, doenças pré-existentes, gravidez, amamentação, cirurgias, tratamentos anteriores e demais condições que possam interferir no procedimento.</p>
+                <p class="mt-1 sm:mt-2">A omissão de qualquer informação relevante será de inteira responsabilidade da paciente.</p>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 3 – DO CONSENTIMENTO</h3>
+                <p>A paciente declara que:</p>
+                <ul class="list-disc pl-4 sm:pl-5 mt-1 sm:mt-2 space-y-0.5 sm:space-y-1">
+                    <li>recebeu todas as informações sobre o procedimento;</li>
+                    <li>teve oportunidade de esclarecer dúvidas;</li>
+                    <li>compreendeu os benefícios, limitações, riscos e possíveis efeitos adversos;</li>
+                    <li>autoriza espontaneamente a realização do procedimento.</li>
+                </ul>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 4 – DOS RESULTADOS</h3>
+                <p>A CONTRATADA compromete-se a empregar técnicas reconhecidas, equipamentos adequados e diligência profissional.</p>
+                <p class="mt-1 sm:mt-2">A paciente declara estar ciente de que:</p>
+                <ul class="list-disc pl-4 sm:pl-5 mt-1 sm:mt-2 space-y-0.5 sm:space-y-1">
+                    <li>não existe garantia de resultado específico;</li>
+                    <li>cada organismo responde de forma diferente;</li>
+                    <li>os resultados dependem de fatores biológicos, genéticos, hormonais, hábitos de vida, tabagismo, alimentação, exposição solar e correta realização dos cuidados pós-procedimento.</li>
+                </ul>
+            </div>
+
+            <div class="avoid-break">
+                <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 5 – DOS RISCOS</h3>
+                <p>A paciente está ciente de que podem ocorrer, ainda que raramente:</p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2 mt-2 pl-4 sm:pl-5">
+                    <ul class="list-disc space-y-0.5 sm:space-y-1">
+                        <li>vermelhidão;</li>
+                        <li>edema;</li>
+                        <li>hematomas;</li>
+                    </ul>
+                    <ul class="list-disc space-y-0.5 sm:space-y-1">
+                        <li>sensibilidade;</li>
+                        <li>descamação;</li>
+                        <li>hiperpigmentação ou hipopigmentação;</li>
+                    </ul>
+                    <ul class="list-disc space-y-0.5 sm:space-y-1">
+                        <li>reações alérgicas;</li>
+                        <li>necessidade de sessões adicionais;</li>
+                        <li>ausência de resposta clínica esperada.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 6 – DOS CUIDADOS PÓS-PROCEDIMENTO</h3>
+                <p>A paciente compromete-se a seguir rigorosamente todas as orientações fornecidas. O descumprimento das recomendações poderá comprometer os resultados e excluir a responsabilidade da profissional pelos efeitos decorrentes.</p>
+            </div>
+
+            <div class="avoid-break bg-gray-50 p-3 sm:p-4 border border-gray-200 rounded-lg">
+                <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 7 – DAS FOTOGRAFIAS</h3>
+                <p class="mb-2 sm:mb-3">A paciente autoriza a realização de fotografias para acompanhamento clínico.</p>
+                <label class="flex items-start gap-2 mb-2 cursor-pointer">
+                    <input type="radio" id="radio-auth-sim" name="foto_auth" class="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 shrink-0">
+                    <span><strong>AUTORIZO</strong> também a utilização das imagens para divulgação científica e publicitária, preservando minha identidade quando possível.</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" id="radio-auth-nao" name="foto_auth" class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 shrink-0">
+                    <span><strong>NÃO AUTORIZO.</strong></span>
+                </label>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 8 – DO PAGAMENTO</h3>
+                <p>Os valores acordados deverão ser pagos conforme orçamento previamente aprovado. Sessões já realizadas não são passíveis de reembolso, salvo determinação legal.</p>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 9 – DO CANCELAMENTO</h3>
+                <p>Cancelamentos ou remarcações deverão ocorrer com antecedência mínima de 24 horas. Na ausência de aviso prévio, poderá haver perda do sinal ou cobrança conforme política da clínica.</p>
+            </div>
+
+            <div>
+                <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 10 – DA LEGISLAÇÃO</h3>
+                <p>Este contrato observa os princípios do Código Civil, do Código de Defesa do Consumidor, da Lei Geral de Proteção de Dados (LGPD) e das normas éticas aplicáveis ao exercício profissional.</p>
+                <p class="mt-3 sm:mt-4 font-semibold text-center border-t border-gray-200 pt-3 sm:pt-4">
+                    Declaro que li integralmente este documento, compreendi seu conteúdo e concordo livremente com todos os seus termos.
+                </p>
+            </div>
+        </div>
+
+        <div class="mt-6 sm:mt-8 text-center text-xs sm:text-base avoid-break">
+            Chapecó/SC, 
+            <input type="text" id="input-dia" class="input-line input-inline w-8 sm:w-12 text-center" placeholder="Dia"> de 
+            <input type="text" id="input-mes" class="input-line input-inline w-24 sm:w-32 text-center" placeholder="Mês"> de 20<input type="text" id="input-ano" class="input-line input-inline w-6 sm:w-8 text-center" placeholder="Ano">.
+        </div>
+
+        <p class="text-[10px] sm:text-xs text-gray-500 mt-4 sm:mt-6 text-left sm:text-justify leading-normal">
+            A escolha do protocolo, da quantidade de disparos, sessões e produtos utilizados é baseada na avaliação técnica da profissional e na necessidade individual da paciente, podendo haver necessidade de ajustes durante o tratamento, sempre mediante ciência e concordância da paciente. A contratação de determinado número de sessões ou disparos não constitui garantia de resultado estético específico, mas sim a prestação do serviço conforme as técnicas reconhecidas e aplicáveis ao caso.
+        </p>
+
+        <div class="mt-6 sm:mt-8 border-2 border-gray-800 p-3 sm:p-6 rounded-lg avoid-break">
+            <h2 class="font-bold text-sm sm:text-lg mb-3 sm:mb-4 text-center border-b pb-2">PLANO DE TRATAMENTO</h2>
+            
+            <div class="space-y-3 sm:space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                    <label class="font-semibold shrink-0">Procedimento(s):</label>
+                    <input type="text" id="plano-procedimentos" class="input-line flex-1">
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                    <label class="font-semibold shrink-0">Região(ões) tratada(s):</label>
+                    <input type="text" id="plano-regioes" class="input-line flex-1">
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                    <label class="font-semibold shrink-0">Equipamento/Produto utilizado:</label>
+                    <input type="text" id="plano-equipamentos" class="input-line flex-1">
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                        <label class="font-semibold shrink-0">Quant. sessões contratadas:</label>
+                        <input type="number" id="plano-sessoes" class="input-line flex-1 w-full">
+                    </div>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                        <label class="font-semibold shrink-0">Disparos (se aplicável):</label>
+                        <input type="number" id="plano-disparos" class="input-line flex-1 w-full">
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                    <label class="font-semibold shrink-0">Quant. ampolas/seringas/frascos (se aplicável):</label>
+                    <input type="text" id="plano-ampolas" class="input-line flex-1">
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-dashed border-gray-300">
+                    <div class="flex items-center gap-2">
+                        <label class="font-bold text-sm sm:text-lg shrink-0">Valor total: R$</label>
+                        <input type="text" id="input-valor" class="input-line flex-1 font-bold text-sm sm:text-lg" placeholder="0,00">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="font-semibold shrink-0">Forma de pagamento:</label>
+                        <input type="text" id="plano-pagamento" class="input-line flex-1">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 sm:mt-12 grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 avoid-break">
+            <!-- Assinatura Paciente -->
+            <div class="flex flex-col items-center">
+                <div class="signature-wrapper mb-2 cursor-pointer group" onclick="openModal('paciente')">
+                    <canvas id="canvas-paciente" class="signature-pad pointer-events-none"></canvas>
+                    <div id="overlay-paciente-hint" class="absolute inset-0 bg-slate-50/80 group-hover:bg-slate-50/60 transition-colors flex flex-col items-center justify-center gap-1.5 no-print p-2">
+                        <span class="text-xs font-semibold text-slate-700 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                            Clique para Assinar
+                        </span>
+                        <span class="text-[10px] text-slate-400 font-medium">Abre a tela cheia para assinar com espaço</span>
+                    </div>
+                    <div class="absolute top-2 right-2 no-print flex gap-1 z-10">
+                        <button onclick="event.stopPropagation(); clearPatientSignature()" class="text-[11px] bg-white/90 hover:bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md border border-gray-200 shadow-sm transition-all active:scale-95 font-medium">Limpar</button>
+                    </div>
+                </div>
+                <div class="w-full text-center border-t-2 border-gray-800 pt-2 font-bold text-xs sm:text-sm">
+                    Assinatura da Paciente
+                </div>
+            </div>
+
+            <!-- Assinatura Profissional (somente leitura) -->
+            <div class="flex flex-col items-center">
+                <div id="signature-profissional-wrapper" class="signature-wrapper mb-2 relative">
+                    <canvas id="canvas-profissional" class="signature-pad pointer-events-none"></canvas>
+                    <div id="overlay-profissional-hint" class="hidden"></div>
+                </div>
+                <div class="w-full text-center border-t-2 border-gray-800 pt-2 font-bold text-xs sm:text-sm">
+                    Assinatura da Profissional
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE ASSINATURA EM TELA CHEIA (EXPANDIDA) -->
+    <div id="signature-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[100] hidden flex-col p-3 sm:p-6 no-print">
+        <div class="bg-white rounded-2xl shadow-2xl flex flex-col w-full h-full max-w-4xl mx-auto overflow-hidden border border-slate-100">
+            <!-- Cabeçalho do Modal -->
+            <div class="bg-slate-50 px-4 py-2.5 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                    <h3 id="modal-title" class="font-bold text-slate-800 text-sm sm:text-base">Assinatura em Tela Cheia</h3>
+                    <p class="text-[11px] text-slate-400 hidden sm:block">Assine com o dedo ou caneta. Você pode virar a tela para mais conforto.</p>
+                </div>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-700 text-xl font-medium w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-200/60 transition-colors">
+                    &times;
+                </button>
+            </div>
+            <!-- Área do Canvas do Modal -->
+            <div class="flex-1 bg-white relative p-2 min-h-0">
+                <canvas id="modal-canvas" class="w-full h-full border border-dashed border-slate-200 rounded-xl touch-none bg-slate-50/50"></canvas>
+            </div>
+            <!-- Rodapé com Botões do Modal -->
+            <div class="bg-slate-50 px-4 py-2.5 border-t border-slate-100 flex justify-between items-center gap-2">
+                <button onclick="window.modalPad?.clear()" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-medium border border-slate-200 transition-all active:scale-95">
+                    Limpar
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="closeModal()" class="px-3 py-1.5 bg-slate-200/80 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-all active:scale-95">
+                        Cancelar
+                    </button>
+                    <button onclick="saveModalSignature()" class="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-medium transition-all active:scale-95 shadow-sm">
+                        Confirmar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- MODAL DA CÂMERA (WEBCAM AO VIVO NO COMPUTADOR OU CELULAR) -->
+    <div id="camera-modal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-[110] hidden flex-col items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-md overflow-hidden border border-slate-100">
+            <div class="bg-slate-50 px-4 py-3 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-sm">Capturar Foto do Paciente</h3>
+                <button onclick="closeCameraModal()" class="text-slate-400 hover:text-slate-700 text-xl font-medium w-7 h-7 flex items-center justify-center rounded-full hover:bg-slate-200/60 transition-colors">&times;</button>
+            </div>
+            
+            <div class="p-4 flex flex-col items-center">
+                <div class="w-full h-64 bg-slate-900 rounded-xl overflow-hidden relative flex items-center justify-center border border-slate-200 shadow-inner">
+                    <video id="camera-video" autoplay playsinline class="w-full h-full object-cover"></video>
+                    <div id="camera-error" class="hidden text-center p-4 text-slate-300 text-xs">
+                        <p class="font-semibold text-rose-400 mb-1">Câmera não disponível ou não permitida.</p>
+                        <p>Verifique as permissões do navegador ou use "Escolher Arquivo" / "Galeria". Em celular, prefira abrir o formulário por HTTPS.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-slate-50 px-4 py-3 border-t border-slate-100 flex justify-between items-center gap-2">
+                <button type="button" onclick="triggerFileInputFromModal()" class="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-600 rounded-lg text-xs font-medium border border-slate-200 transition-all active:scale-95">
+                    Escolher Arquivo
+                </button>
+                <button type="button" onclick="takeSnapshot()" id="btn-take-photo" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-all active:scale-95 shadow-sm flex items-center gap-1.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Tirar Foto
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/js/contract-patient.js"></script>
+</body>
+</html>
