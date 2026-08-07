@@ -10,8 +10,33 @@ const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julh
 
 let signaturePad = null;
 let loadedSignatureDataUrl = null;
+let editingContractId = null;
 
 const SIG_MAX_WIDTH = 600;
+
+const adminFieldMap = {
+  patient_label: 'patient-label',
+  plano_procedimentos: 'plano-procedimentos',
+  plano_regioes: 'plano-regioes',
+  plano_equipamentos: 'plano-equipamentos',
+  plano_sessoes: 'plano-sessoes',
+  plano_disparos: 'plano-disparos',
+  plano_ampolas: 'plano-ampolas',
+  valor_total: 'valor-total',
+  plano_pagamento: 'plano-pagamento',
+  dia: 'dia',
+  mes: 'mes',
+  ano: 'ano',
+};
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 function showAlert(message, type = 'error') {
   alertBox.textContent = message;
@@ -120,6 +145,184 @@ function setLoggedIn(isLoggedIn) {
   btnLogout.classList.toggle('hidden', !isLoggedIn);
 }
 
+async function fetchContractById(id) {
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+function formatField(label, value) {
+  if (!value) return '';
+  return `<div><p class="text-xs font-medium text-slate-500">${escapeHtml(label)}</p><p class="text-slate-800">${escapeHtml(value)}</p></div>`;
+}
+
+function formatSignatureBlock(label, dataUrl) {
+  if (!dataUrl) {
+    return `<div><p class="text-xs font-medium text-slate-500 mb-1">${label}</p><p class="text-slate-400 italic">Não registrada</p></div>`;
+  }
+  return `
+    <div>
+      <p class="text-xs font-medium text-slate-500 mb-1">${label}</p>
+      <img src="${dataUrl}" alt="${label}" class="max-h-24 border rounded-lg bg-slate-50">
+    </div>
+  `;
+}
+
+function openViewModal(contract) {
+  const label = contract.paciente_nome || contract.patient_label || 'Sem identificação';
+  const signedAt = contract.signed_at
+    ? new Date(contract.signed_at).toLocaleString('pt-BR')
+    : '—';
+
+  const planFields = [
+    ['Procedimento(s)', contract.plano_procedimentos],
+    ['Região(ões)', contract.plano_regioes],
+    ['Equipamento/Produto', contract.plano_equipamentos],
+    ['Sessões', contract.plano_sessoes],
+    ['Disparos', contract.plano_disparos],
+    ['Ampolas/Seringas/Frascos', contract.plano_ampolas],
+    ['Valor total', contract.valor_total ? `R$ ${contract.valor_total}` : ''],
+    ['Forma de pagamento', contract.plano_pagamento],
+    ['Data', [contract.dia, contract.mes, contract.ano].filter(Boolean).join(' / ')],
+  ].map(([lbl, val]) => formatField(lbl, val)).join('');
+
+  const photoBlock = contract.paciente_foto
+    ? `<div>
+        <p class="text-xs font-medium text-slate-500 mb-1">Foto da paciente</p>
+        <a href="${contract.paciente_foto}" target="_blank" rel="noopener" class="inline-block">
+          <img src="${contract.paciente_foto}" alt="Foto da paciente" class="max-h-32 border rounded-lg">
+        </a>
+      </div>`
+    : '';
+
+  document.getElementById('view-modal-body').innerHTML = `
+    <div class="space-y-3">
+      <p class="font-medium text-slate-900 text-base">${escapeHtml(label)}</p>
+      ${formatField('CPF', contract.paciente_cpf)}
+      ${formatField('Telefone', contract.paciente_telefone)}
+      ${formatField('Assinado em', signedAt)}
+    </div>
+    <hr class="border-slate-200">
+    <div class="grid gap-3">${planFields}</div>
+    ${photoBlock ? `<hr class="border-slate-200">${photoBlock}` : ''}
+    <hr class="border-slate-200">
+    <div class="grid sm:grid-cols-2 gap-4">
+      ${formatSignatureBlock('Assinatura da paciente', contract.sig_paciente)}
+      ${formatSignatureBlock('Assinatura da profissional', contract.sig_profissional)}
+    </div>
+  `;
+
+  document.getElementById('view-modal').classList.remove('hidden');
+}
+
+function closeViewModal() {
+  document.getElementById('view-modal').classList.add('hidden');
+}
+
+function fillFormFromContract(contract) {
+  Object.entries(adminFieldMap).forEach(([dbKey, elId]) => {
+    const el = document.getElementById(elId);
+    if (el && contract[dbKey] != null) {
+      el.value = contract[dbKey];
+    }
+  });
+}
+
+function clearFormFields() {
+  document.getElementById('contract-form').reset();
+  fillCurrentDate();
+  signaturePad.clear();
+  loadedSignatureDataUrl = null;
+}
+
+function setEditMode(contract) {
+  editingContractId = contract.id;
+  const label = contract.patient_label || contract.paciente_nome || 'Sem identificação';
+  document.getElementById('edit-banner').classList.remove('hidden');
+  document.getElementById('edit-banner-text').textContent = `Editando contrato: ${label}`;
+  document.getElementById('form-title').textContent = 'Editar contrato';
+  document.getElementById('btn-create').textContent = 'Salvar alterações';
+  document.getElementById('link-result').classList.add('hidden');
+  document.getElementById('contract-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function resetFormToNew() {
+  editingContractId = null;
+  document.getElementById('edit-banner').classList.add('hidden');
+  document.getElementById('form-title').textContent = 'Novo contrato';
+  document.getElementById('btn-create').textContent = 'Gerar link para paciente';
+  document.getElementById('link-result').classList.add('hidden');
+  clearFormFields();
+}
+
+async function restoreSavedSignature() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return;
+  const savedSig = await loadSavedSignature(session.user.id);
+  if (savedSig) {
+    await applySignatureToPad(savedSig);
+  }
+}
+
+async function startEditContract(id) {
+  try {
+    const contract = await fetchContractById(id);
+    if (contract.status !== 'sent') {
+      showAlert('Apenas contratos aguardando assinatura podem ser editados.');
+      return;
+    }
+    fillFormFromContract(contract);
+    if (contract.sig_profissional) {
+      await applySignatureToPad(contract.sig_profissional);
+    } else {
+      signaturePad.clear();
+      loadedSignatureDataUrl = null;
+    }
+    setEditMode(contract);
+    hideAlert();
+  } catch (err) {
+    showAlert(err.message || 'Erro ao carregar contrato para edição.');
+  }
+}
+
+async function startViewContract(id) {
+  try {
+    const contract = await fetchContractById(id);
+    if (contract.status !== 'signed') {
+      showAlert('Este contrato ainda não foi assinado.');
+      return;
+    }
+    openViewModal(contract);
+  } catch (err) {
+    showAlert(err.message || 'Erro ao carregar contrato.');
+  }
+}
+
+function buildContractPayload(session, sigData) {
+  return {
+    created_by: session.user.id,
+    status: 'sent',
+    patient_label: document.getElementById('patient-label').value.trim(),
+    plano_procedimentos: document.getElementById('plano-procedimentos').value.trim(),
+    plano_regioes: document.getElementById('plano-regioes').value.trim(),
+    plano_equipamentos: document.getElementById('plano-equipamentos').value.trim(),
+    plano_sessoes: document.getElementById('plano-sessoes').value.trim(),
+    plano_disparos: document.getElementById('plano-disparos').value.trim(),
+    plano_ampolas: document.getElementById('plano-ampolas').value.trim(),
+    valor_total: document.getElementById('valor-total').value.trim(),
+    plano_pagamento: document.getElementById('plano-pagamento').value.trim(),
+    dia: document.getElementById('dia').value.trim(),
+    mes: document.getElementById('mes').value.trim(),
+    ano: document.getElementById('ano').value.trim(),
+    sig_profissional: sigData,
+  };
+}
+
 async function loadContracts() {
   const { data, error } = await supabase
     .from('contracts')
@@ -138,16 +341,29 @@ async function loadContracts() {
   }
 
   contractsList.innerHTML = data.map((item) => {
-    const label = item.paciente_nome || item.patient_label || 'Sem identificação';
+    const label = escapeHtml(item.paciente_nome || item.patient_label || 'Sem identificação');
     const statusLabel = item.status === 'signed' ? 'Assinado' : item.status === 'sent' ? 'Aguardando' : 'Rascunho';
     const link = contractUrl(item.token);
+
+    const editBtn = item.status === 'sent'
+      ? `<button type="button" data-id="${item.id}" class="btn-edit-contract text-xs border border-slate-300 text-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-50">Editar</button>`
+      : '';
+
+    const viewBtn = item.status === 'signed'
+      ? `<button type="button" data-id="${item.id}" class="btn-view-contract text-xs border border-slate-300 text-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-50">Visualizar</button>`
+      : '';
+
     return `
       <div class="border rounded-lg p-3 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
         <div>
           <p class="font-medium text-slate-800">${label}</p>
           <p class="text-xs text-slate-500">${statusLabel} · ${new Date(item.created_at).toLocaleString('pt-BR')}</p>
         </div>
-        <button type="button" data-link="${link}" class="copy-item-link text-xs bg-slate-900 text-white rounded-lg px-3 py-1.5">Copiar link</button>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" data-link="${link}" class="copy-item-link text-xs bg-slate-900 text-white rounded-lg px-3 py-1.5">Copiar link</button>
+          ${editBtn}
+          ${viewBtn}
+        </div>
       </div>
     `;
   }).join('');
@@ -157,6 +373,14 @@ async function loadContracts() {
       await navigator.clipboard.writeText(btn.dataset.link);
       showAlert('Link copiado!', 'success');
     });
+  });
+
+  contractsList.querySelectorAll('.btn-edit-contract').forEach((btn) => {
+    btn.addEventListener('click', () => startEditContract(btn.dataset.id));
+  });
+
+  contractsList.querySelectorAll('.btn-view-contract').forEach((btn) => {
+    btn.addEventListener('click', () => startViewContract(btn.dataset.id));
   });
 }
 
@@ -276,6 +500,18 @@ async function bootstrap() {
     showAlert('Link copiado!', 'success');
   });
 
+  document.getElementById('btn-cancel-edit').addEventListener('click', async () => {
+    resetFormToNew();
+    await restoreSavedSignature();
+    hideAlert();
+  });
+
+  document.getElementById('btn-close-view').addEventListener('click', closeViewModal);
+
+  document.getElementById('view-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'view-modal') closeViewModal();
+  });
+
   document.getElementById('contract-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     hideAlert();
@@ -291,44 +527,50 @@ async function bootstrap() {
       showAlert('Assine o contrato antes de gerar o link.');
       return;
     }
-    const payload = {
-      created_by: session.user.id,
-      status: 'sent',
-      patient_label: document.getElementById('patient-label').value.trim(),
-      plano_procedimentos: document.getElementById('plano-procedimentos').value.trim(),
-      plano_regioes: document.getElementById('plano-regioes').value.trim(),
-      plano_equipamentos: document.getElementById('plano-equipamentos').value.trim(),
-      plano_sessoes: document.getElementById('plano-sessoes').value.trim(),
-      plano_disparos: document.getElementById('plano-disparos').value.trim(),
-      plano_ampolas: document.getElementById('plano-ampolas').value.trim(),
-      valor_total: document.getElementById('valor-total').value.trim(),
-      plano_pagamento: document.getElementById('plano-pagamento').value.trim(),
-      dia: document.getElementById('dia').value.trim(),
-      mes: document.getElementById('mes').value.trim(),
-      ano: document.getElementById('ano').value.trim(),
-      sig_profissional: sigData,
-    };
 
+    const payload = buildContractPayload(session, sigData);
     const btn = document.getElementById('btn-create');
-    btn.disabled = true;
-    btn.textContent = 'Gerando...';
+    const isEditing = Boolean(editingContractId);
 
-    const { data, error } = await supabase.from('contracts').insert(payload).select('token').single();
+    btn.disabled = true;
+    btn.textContent = isEditing ? 'Salvando...' : 'Gerando...';
+
+    let result;
+    if (isEditing) {
+      const { data, error } = await supabase
+        .from('contracts')
+        .update(payload)
+        .eq('id', editingContractId)
+        .eq('status', 'sent')
+        .select('token')
+        .single();
+      result = { data, error };
+    } else {
+      const { data, error } = await supabase.from('contracts').insert(payload).select('token').single();
+      result = { data, error };
+    }
 
     btn.disabled = false;
-    btn.textContent = 'Gerar link para paciente';
+    btn.textContent = isEditing ? 'Salvar alterações' : 'Gerar link para paciente';
 
-    if (error) {
-      showAlert(error.message);
+    if (result.error) {
+      showAlert(result.error.message);
       return;
     }
 
     await saveProfileSignature(session.user.id, sigData);
 
-    const link = contractUrl(data.token);
-    document.getElementById('generated-link').value = link;
-    document.getElementById('link-result').classList.remove('hidden');
-    showAlert('Contrato criado! Envie o link para a paciente.', 'success');
+    if (isEditing) {
+      showAlert('Contrato atualizado com sucesso!', 'success');
+      resetFormToNew();
+      await restoreSavedSignature();
+    } else {
+      const link = contractUrl(result.data.token);
+      document.getElementById('generated-link').value = link;
+      document.getElementById('link-result').classList.remove('hidden');
+      showAlert('Contrato criado! Envie o link para a paciente.', 'success');
+    }
+
     await loadContracts();
   });
 }
