@@ -100,10 +100,14 @@
           <div>
             <label class="block text-xs font-medium text-slate-500 mb-2">Sua assinatura</label>
             <canvas id="sig-canvas" class="signature-box w-full touch-none"></canvas>
-            <div class="flex gap-2 mt-2">
-              <button type="button" id="btn-clear-sig" class="text-xs border rounded-lg px-3 py-1.5">Limpar assinatura</button>
-              <button type="button" id="btn-load-sig" class="text-xs border rounded-lg px-3 py-1.5">Usar assinatura salva</button>
+            <div class="flex flex-wrap gap-2 mt-2">
+              <button type="button" id="btn-clear-sig" class="text-xs border rounded-lg px-3 py-1.5 hover:bg-slate-50">Limpar assinatura</button>
+              <button type="button" id="btn-load-sig" class="text-xs border rounded-lg px-3 py-1.5 hover:bg-slate-50">Usar assinatura salva</button>
+              <button type="button" id="btn-upload-sig" class="text-xs border rounded-lg px-3 py-1.5 hover:bg-slate-50">Carregar foto da assinatura</button>
+              <button type="button" id="btn-save-sig" class="text-xs border rounded-lg px-3 py-1.5 hover:bg-slate-50">Salvar assinatura no perfil</button>
+              <input type="file" id="sig-file-input" accept="image/png,image/jpeg,image/jpg" class="hidden">
             </div>
+            <p class="text-xs text-slate-400 mt-1">PNG ou JPG. A imagem é redimensionada automaticamente.</p>
           </div>
 
           <button type="submit" id="btn-create" class="w-full bg-slate-900 text-white rounded-lg py-2.5 text-sm font-medium">

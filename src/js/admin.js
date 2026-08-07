@@ -9,6 +9,9 @@ const btnLogout = document.getElementById('btn-logout');
 const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 let signaturePad = null;
+let loadedSignatureDataUrl = null;
+
+const SIG_MAX_WIDTH = 600;
 
 function showAlert(message, type = 'error') {
   alertBox.textContent = message;
@@ -44,6 +47,54 @@ function initSignaturePad() {
     minWidth: 1.2,
     maxWidth: 3,
   });
+
+  signaturePad.addEventListener('endStroke', () => {
+    loadedSignatureDataUrl = null;
+  });
+}
+
+function compressSignatureImage(file, maxWidth = SIG_MAX_WIDTH, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Imagem inválida.'));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const mime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        resolve(canvas.toDataURL(mime, quality));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function applySignatureToPad(dataUrl) {
+  signaturePad.clear();
+  await signaturePad.fromDataURL(dataUrl, {
+    ratio: 1,
+    width: signaturePad.canvas.offsetWidth,
+    height: signaturePad.canvas.offsetHeight,
+  });
+  loadedSignatureDataUrl = dataUrl;
+}
+
+function getSignatureDataUrl() {
+  if (!signaturePad.isEmpty()) {
+    return signaturePad.toDataURL('image/png');
+  }
+  return loadedSignatureDataUrl;
 }
 
 async function loadSavedSignature(userId) {
@@ -122,7 +173,7 @@ async function bootstrap() {
   if (session) {
     setLoggedIn(true);
     const savedSig = await loadSavedSignature(session.user.id);
-    if (savedSig) signaturePad.fromDataURL(savedSig);
+    if (savedSig) await applySignatureToPad(savedSig);
     await loadContracts();
   }
 
@@ -140,7 +191,7 @@ async function bootstrap() {
 
     setLoggedIn(true);
     const savedSig = await loadSavedSignature(data.user.id);
-    if (savedSig) signaturePad.fromDataURL(savedSig);
+    if (savedSig) await applySignatureToPad(savedSig);
     await loadContracts();
   });
 
@@ -150,18 +201,73 @@ async function bootstrap() {
     hideAlert();
   });
 
-  document.getElementById('btn-clear-sig').addEventListener('click', () => signaturePad.clear());
+  document.getElementById('btn-clear-sig').addEventListener('click', () => {
+    signaturePad.clear();
+    loadedSignatureDataUrl = null;
+  });
 
   document.getElementById('btn-load-sig').addEventListener('click', async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const savedSig = await loadSavedSignature(session.user.id);
     if (savedSig) {
-      signaturePad.fromDataURL(savedSig);
+      await applySignatureToPad(savedSig);
       showAlert('Assinatura carregada.', 'success');
     } else {
       showAlert('Nenhuma assinatura salva encontrada.');
     }
+  });
+
+  const sigFileInput = document.getElementById('sig-file-input');
+
+  document.getElementById('btn-upload-sig').addEventListener('click', () => {
+    sigFileInput.click();
+  });
+
+  sigFileInput.addEventListener('change', async () => {
+    const file = sigFileInput.files?.[0];
+    sigFileInput.value = '';
+    if (!file) return;
+
+    if (!['image/png', 'image/jpeg', 'image/jpg'].includes(file.type)) {
+      showAlert('Use uma imagem PNG ou JPG.');
+      return;
+    }
+
+    try {
+      const dataUrl = await compressSignatureImage(file);
+      await applySignatureToPad(dataUrl);
+      showAlert('Foto da assinatura carregada. Clique em "Salvar assinatura no perfil" para guardar.', 'success');
+    } catch (err) {
+      showAlert(err.message || 'Erro ao processar a imagem.');
+    }
+  });
+
+  document.getElementById('btn-save-sig').addEventListener('click', async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      showAlert('Faça login novamente.');
+      return;
+    }
+
+    const sigData = getSignatureDataUrl();
+    if (!sigData) {
+      showAlert('Desenhe ou carregue uma assinatura antes de salvar.');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('perfis')
+      .update({ sig_profissional: sigData })
+      .eq('id', session.user.id);
+
+    if (error) {
+      showAlert(error.message);
+      return;
+    }
+
+    loadedSignatureDataUrl = sigData;
+    showAlert('Assinatura salva no perfil.', 'success');
   });
 
   document.getElementById('btn-copy-link').addEventListener('click', async () => {
@@ -180,12 +286,11 @@ async function bootstrap() {
       return;
     }
 
-    if (signaturePad.isEmpty()) {
+    const sigData = getSignatureDataUrl();
+    if (!sigData) {
       showAlert('Assine o contrato antes de gerar o link.');
       return;
     }
-
-    const sigData = signaturePad.toDataURL('image/png');
     const payload = {
       created_by: session.user.id,
       status: 'sent',
