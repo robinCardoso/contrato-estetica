@@ -647,16 +647,95 @@ let contractReady = false;
             saveFormData(); // Salva estado apÃ³s remover foto
         }
 
-        function generatePDF() {
-            const inputNome = document.getElementById('input-nome');
-            const pacienteNome = inputNome && inputNome.value.trim() !== '' ? inputNome.value : 'Paciente';
+        const VALIDATION_ERROR_CLASS = 'field-validation-error';
 
-            // ValidaÃ§Ã£o simples: Exigir o nome do paciente
-            if (pacienteNome === 'Paciente') {
-                alert("Por favor, preencha o Nome Completo do(a) paciente antes de gerar o PDF.");
-                if (inputNome) inputNome.focus();
-                return;
+        function clearValidationErrors() {
+            document.querySelectorAll(`.${VALIDATION_ERROR_CLASS}`).forEach((el) => {
+                el.classList.remove(VALIDATION_ERROR_CLASS, 'ring-2', 'ring-red-500', 'border-red-500');
+            });
+        }
+
+        function markFieldError(el) {
+            if (el) el.classList.add(VALIDATION_ERROR_CLASS, 'ring-2', 'ring-red-500', 'border-red-500');
+        }
+
+        function validatePatientFormBeforePDF() {
+            clearValidationErrors();
+            const errors = [];
+
+            const inputNome = document.getElementById('input-nome');
+            if (!inputNome?.value.trim()) {
+                errors.push({ label: 'Nome completo', element: inputNome });
             }
+
+            const inputCpf = document.getElementById('input-cpf');
+            if (!inputCpf?.value.trim()) {
+                errors.push({ label: 'CPF', element: inputCpf });
+            }
+
+            const inputRg = document.getElementById('input-rg');
+            if (!inputRg?.value.trim()) {
+                errors.push({ label: 'RG', element: inputRg });
+            }
+
+            const inputTelefone = document.getElementById('input-telefone');
+            if (!inputTelefone?.value.trim()) {
+                errors.push({ label: 'Telefone', element: inputTelefone });
+            }
+
+            const imgElement = document.getElementById('patient-photo-img');
+            const photoContainer = document.getElementById('photo-preview-container');
+            const hasPhoto = imgElement &&
+                !imgElement.classList.contains('hidden') &&
+                imgElement.src &&
+                imgElement.src !== window.location.href;
+            if (!hasPhoto) {
+                errors.push({ label: 'Foto do paciente', scrollTarget: photoContainer });
+            }
+
+            const authSim = document.getElementById('radio-auth-sim');
+            const authNao = document.getElementById('radio-auth-nao');
+            const clause7 = authSim?.closest('.avoid-break');
+            if (!authSim?.checked && !authNao?.checked) {
+                errors.push({
+                    label: 'Autorização de fotografias (Cláusula 7) — selecione AUTORIZO ou NÃO AUTORIZO',
+                    scrollTarget: clause7,
+                });
+            }
+
+            const hasSignature = modalImageBackup.paciente || !padPaciente.isEmpty();
+            const signatureWrapper = document.getElementById('canvas-paciente')?.closest('.signature-wrapper');
+            if (!hasSignature) {
+                errors.push({ label: 'Assinatura da paciente', scrollTarget: signatureWrapper });
+            }
+
+            if (errors.length === 0) return true;
+
+            errors.forEach((err) => {
+                if (err.element) markFieldError(err.element);
+                else if (err.scrollTarget) markFieldError(err.scrollTarget);
+            });
+
+            const list = errors.map((err, i) => `${i + 1}. ${err.label}`).join('\n');
+            alert(`Não é possível gerar o PDF. Preencha os campos obrigatórios:\n\n${list}`);
+
+            const first = errors[0];
+            const scrollEl = first.scrollTarget || first.element;
+            if (scrollEl) {
+                scrollEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            if (first.element?.focus) {
+                setTimeout(() => first.element.focus(), 300);
+            }
+
+            return false;
+        }
+
+        function generatePDF() {
+            if (!validatePatientFormBeforePDF()) return;
+
+            const inputNome = document.getElementById('input-nome');
+            const pacienteNome = inputNome.value.trim();
 
             const btnGerar = document.getElementById('btn-gerar');
             const originalText = btnGerar.innerHTML;
