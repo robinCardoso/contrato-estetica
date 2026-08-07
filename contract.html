@@ -172,6 +172,40 @@
             -webkit-backdrop-filter: blur(12px);
             backdrop-filter: blur(12px);
         }
+
+        /* CLÁUSULA 5 – lista de riscos em grid responsivo */
+        .risks-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.25rem 1.25rem;
+            margin-top: 0.5rem;
+            padding-left: 1.25rem;
+            list-style-type: disc;
+            list-style-position: outside;
+        }
+        .risks-list li {
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            hyphens: auto;
+            -webkit-hyphens: auto;
+            text-wrap: pretty;
+            padding-left: 0.15rem;
+            line-height: 1.4;
+        }
+        @media (min-width: 480px) {
+            .risks-list {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        @media (min-width: 768px) {
+            .risks-list {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+        body.pdf-mode .risks-list {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.2rem 0.75rem;
+        }
     </style>
 </head>
 <body class="py-3 px-2 sm:py-6 sm:px-6">
@@ -302,23 +336,17 @@
             <div class="avoid-break">
                 <h3 class="font-bold text-xs sm:text-sm">CLÁUSULA 5 – DOS RISCOS</h3>
                 <p>A paciente está ciente de que podem ocorrer, ainda que raramente:</p>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-2 mt-2 pl-4 sm:pl-5">
-                    <ul class="list-disc space-y-0.5 sm:space-y-1">
-                        <li>vermelhidão;</li>
-                        <li>edema;</li>
-                        <li>hematomas;</li>
-                    </ul>
-                    <ul class="list-disc space-y-0.5 sm:space-y-1">
-                        <li>sensibilidade;</li>
-                        <li>descamação;</li>
-                        <li>hiperpigmentação ou hipopigmentação;</li>
-                    </ul>
-                    <ul class="list-disc space-y-0.5 sm:space-y-1">
-                        <li>reações alérgicas;</li>
-                        <li>necessidade de sessões adicionais;</li>
-                        <li>ausência de resposta clínica esperada.</li>
-                    </ul>
-                </div>
+                <ul class="risks-list pl-4 sm:pl-5">
+                    <li>vermelhidão;</li>
+                    <li>edema;</li>
+                    <li>hematomas;</li>
+                    <li>sensibilidade;</li>
+                    <li>descamação;</li>
+                    <li>hiperpigmentação ou&nbsp;hipopigmentação;</li>
+                    <li>reações alérgicas;</li>
+                    <li>necessidade de sessões&nbsp;adicionais;</li>
+                    <li>ausência de resposta clínica esperada.</li>
+                </ul>
             </div>
 
             <div>
